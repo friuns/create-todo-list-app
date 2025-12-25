@@ -1,0 +1,230 @@
+name: "Comment on PR on Workflow Failure"
+
+on:
+  workflow_run:
+    workflows: ["*"]  # Monitor only deploy workflow
+    types:
+      - completed
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  comment-on-failure:
+    runs-on: ubuntu-latest
+    # Trigger on failure from push or pull_request events (push to PR branch also counts)
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+
+    steps:
+      - name: Comment on PR with failure details
+        uses: actions/github-script@v7
+        with:
+          # Use a Personal Access Token (PAT) to post comments as the repository owner
+          # instead of github-actions[bot]. You need to:
+          # 1. Create a PAT at: https://github.com/settings/tokens (Fine-grained or Classic)
+          #    - For Classic PAT: Select 'repo' scope
+          #    - For Fine-grained PAT: Select 'Pull requests' and 'Issues' with read/write access
+          # 2. Add it as a repository secret named 'PAT_TOKEN' at:
+          #    Settings > Secrets and variables > Actions > New repository secret
+          github-token: ${{ secrets.OAUTH_TOKEN }}
+          script: |
+            // Use the workflow run data from the event payload
+            const workflowRun = context.payload.workflow_run;
+            
+            console.log(`Processing failed workflow: ${workflowRun.name}`);
+            console.log(`Workflow run ID: ${workflowRun.id}`);
+            console.log(`Head SHA: ${workflowRun.head_sha}`);
+
+            // Get the jobs for this workflow run
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: workflowRun.id,
+              filter: 'latest'
+            });
+
+            // Find failed jobs
+            const failedJobs = jobs.data.jobs.filter(job => job.conclusion === 'failure');
+
+            // Get the PR that triggered this workflow
+            const pullRequests = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: workflowRun.head_sha
+            });
+
+            if (pullRequests.data.length === 0) {
+              console.log('No pull request found for this commit');
+              return;
+            }
+
+            const pr = pullRequests.data[0];
+
+            // Fetch logs and annotations for failed jobs
+            const jobLogs = {};
+            const jobAnnotations = {};
+            for (const job of failedJobs) {
+              try {
+                const logsResponse = await github.rest.actions.downloadJobLogsForWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  job_id: job.id
+                });
+
+                // The response is the log content as a string
+                let logs = logsResponse.data;
+
+                // Extract last 100 lines to keep comment size manageable
+                const lines = logs.split('\n');
+                const maxLines = 100;
+                if (lines.length > maxLines) {
+                  logs = `... (truncated ${lines.length - maxLines} lines)\n\n` + lines.slice(-maxLines).join('\n');
+                }
+
+                jobLogs[job.id] = logs;
+              } catch (error) {
+                console.log(`Failed to fetch logs for job ${job.name}: ${error.message}`);
+                jobLogs[job.id] = 'Unable to fetch logs: '+error.message;
+              }
+
+              // Fetch annotations for this job
+              try {
+                // Get check runs for the commit to find the check run associated with this job
+                const checkRuns = await github.rest.checks.listForRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: workflowRun.head_sha
+                });
+
+                const jobAnnotationsList = [];
+                const seenAnnotations = new Set(); // Track unique annotations
+
+                for (const checkRun of checkRuns.data.check_runs) {
+                  // Try to match check run to job by name similarity or external_id
+                  const isRelatedToJob = checkRun.name.includes(job.name) ||
+                                        job.name.includes(checkRun.name) ||
+                                        checkRun.external_id === job.id.toString();
+
+                  if (checkRun.conclusion === 'failure' && isRelatedToJob) {
+                    try {
+                      const annotations = await github.rest.checks.listAnnotations({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        check_run_id: checkRun.id
+                      });
+
+                      if (annotations.data.length > 0) {
+                        for (const annotation of annotations.data) {
+                          // Create a unique key for deduplication
+                          const annotationKey = `${annotation.message || ''}|${annotation.path || ''}|${annotation.start_line || ''}|${annotation.title || ''}`;
+
+                          if (!seenAnnotations.has(annotationKey)) {
+                            seenAnnotations.add(annotationKey);
+                            jobAnnotationsList.push(annotation);
+                          }
+                        }
+                      }
+                    } catch (annotationError) {
+                      console.log(`Failed to fetch annotations for check run ${checkRun.id}: ${annotationError.message}`);
+                    }
+                  }
+                }
+
+                jobAnnotations[job.id] = jobAnnotationsList;
+              } catch (error) {
+                console.log(`Failed to fetch annotations for job ${job.name}: ${error.message}`);
+                jobAnnotations[job.id] = [];
+              }
+            }
+
+            // Build the comment body
+            let commentBody = `@copilot @jules\n\n`;
+            commentBody += `## ❌ Workflow Failed\n\n`;
+            commentBody += `**Workflow:** ${workflowRun.name}\n`;
+            commentBody += `**Run:** #${workflowRun.run_number}\n`;
+            commentBody += `**Commit:** ${workflowRun.head_sha.substring(0, 7)}\n`;
+            commentBody += `**Triggered by:** @${workflowRun.triggering_actor.login}\n\n`;
+
+            if (failedJobs.length > 0) {
+              for (const job of failedJobs) {
+                commentBody += `### ❌ ${job.name}\n\n`;
+                
+                if (job.steps) {
+                  const failedSteps = job.steps.filter(step => step.conclusion === 'failure');
+                  if (failedSteps.length > 0) {
+                    commentBody += `**Failed Steps:** ${failedSteps.map(s => s.name).join(', ')}\n\n`;
+                  }
+                }
+                
+                // Add the logs in a collapsible section
+                commentBody += `<details>\n<summary>📋 View Logs</summary>\n\n`;
+                commentBody += `\`\`\`\n${jobLogs[job.id] || 'No logs available'}\n\`\`\`\n`;
+                commentBody += `</details>\n\n`;
+
+                // Add annotations if available
+                if (jobAnnotations[job.id] && jobAnnotations[job.id].length > 0) {
+                  commentBody += `<details>\n<summary>🔍 View Annotations (${jobAnnotations[job.id].length})</summary>\n\n`;
+
+                  for (const annotation of jobAnnotations[job.id]) {
+                    const levelEmoji = {
+                      'notice': 'ℹ️',
+                      'warning': '⚠️',
+                      'failure': '❌'
+                    }[annotation.annotation_level] || '❓';
+
+                    commentBody += `**${levelEmoji} ${annotation.annotation_level.toUpperCase()}:** ${annotation.title || 'No title'}\n`;
+                    if (annotation.message) {
+                      commentBody += `${annotation.message}\n`;
+                    }
+                    if (annotation.path && annotation.start_line) {
+                      commentBody += `*File: ${annotation.path}:${annotation.start_line}`;
+                      if (annotation.end_line && annotation.end_line !== annotation.start_line) {
+                        commentBody += `-${annotation.end_line}`;
+                      }
+                      commentBody += `*\n`;
+                    }
+                    commentBody += `\n---\n\n`;
+                  }
+
+                  commentBody += `</details>\n\n`;
+                }
+              }
+            }
+
+            commentBody += `---\n`;
+            commentBody += `*🤖 This comment was automatically generated by GitHub Actions2*`;
+
+            // Check if we already commented on this PR for this workflow run
+            const existingComments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number
+            });
+
+            const alreadyCommented = existingComments.data.some(comment =>
+              comment.body && 
+              comment.body.includes(`Workflow Failed`) &&
+              comment.body.includes(`Run: [#${workflowRun.run_number}]`)
+            );
+
+            const totalComments = existingComments.data.length;
+
+            if (!alreadyCommented && totalComments < 10) {
+              // Post the comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: commentBody
+              });
+
+              console.log(`✅ Posted failure comment on PR #${pr.number}`);
+            } else if (alreadyCommented) {
+              console.log(`ℹ️ Already commented on PR #${pr.number} for this workflow run`);
+            } else if (totalComments >= 3) {
+              console.log(`ℹ️ Skipping comment on PR #${pr.number} - PR already has ${totalComments} comments (>= 10)`);
+            }
