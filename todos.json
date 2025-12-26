@@ -1,0 +1,14 @@
+[
+  {
+    "id": 1766738387414,
+    "text": "Learn JavaScript",
+    "completed": false,
+    "createdAt": "2025-12-26T08:39:47.414Z"
+  },
+  {
+    "id": 1766738387549,
+    "text": "Build a todo app",
+    "completed": false,
+    "createdAt": "2025-12-26T08:39:47.549Z"
+  }
+]
