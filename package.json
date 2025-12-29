@@ -1,0 +1,12 @@
+{
+  "name": "serverless-query-app",
+  "version": "1.0.0",
+  "description": "A simple serverless app to print query text.",
+  "main": "index.js",
+  "scripts": {
+    "build": "mkdir -p dist && cp index.html dist/"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
