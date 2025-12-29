@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Text Server App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 18px;
+        }
+        .form-container {
+            background-color: #f8f9fa;
+            padding: 30px;
+            border-radius: 8px;
+            margin: 30px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: 600;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: transform 0.2s;
+            font-weight: 600;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        .info-box {
+            background-color: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+            border-left: 4px solid #2196f3;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .info-box ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .info-box li {
+            margin: 8px 0;
+            color: #555;
+        }
+        code {
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d32f2f;
+        }
+        .example-link {
+            display: inline-block;
+            margin: 5px 10px 5px 0;
+            padding: 8px 15px;
+            background-color: #fff;
+            border: 2px solid #667eea;
+            border-radius: 6px;
+            color: #667eea;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        .example-link:hover {
+            background-color: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Query Text Server App</h1>
+        <p class="subtitle">A serverless function that displays query parameters</p>
+        
+        <div class="form-container">
+            <h2>Try It Out:</h2>
+            <label for="queryText">Enter your text:</label>
+            <input type="text" id="queryText" placeholder="Type something here..." value="Hello, World!">
+            <button onclick="submitQuery()">Submit Query</button>
+        </div>
+        
+        <div class="info-box">
+            <h3>📖 How It Works</h3>
+            <ul>
+                <li>This app uses <strong>Netlify Functions</strong> to handle serverless requests</li>
+                <li>Enter text above and click "Submit Query" to see it processed server-side</li>
+                <li>The server function extracts the <code>text</code> parameter from the URL</li>
+                <li>All query parameters are displayed in a formatted view</li>
+            </ul>
+            
+            <h3>🔗 Example Links</h3>
+            <p>Click these links to test different query parameters:</p>
+            <a href="/.netlify/functions/query-text?text=Hello%20Netlify" class="example-link">Hello Netlify</a>
+            <a href="/.netlify/functions/query-text?text=Server-Side%20Rendering" class="example-link">Server-Side Rendering</a>
+            <a href="/.netlify/functions/query-text?text=Test&param1=value1&param2=value2" class="example-link">Multiple Parameters</a>
+            
+            <h3>💻 API Endpoint</h3>
+            <p>Direct function URL: <code>/.netlify/functions/query-text</code></p>
+            <p>Add parameters: <code>?text=your_text_here</code></p>
+        </div>
+    </div>
+    
+    <script>
+        function submitQuery() {
+            const text = document.getElementById('queryText').value;
+            const encodedText = encodeURIComponent(text);
+            window.location.href = `/.netlify/functions/query-text?text=${encodedText}`;
+        }
+        
+        // Allow Enter key to submit
+        document.getElementById('queryText').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitQuery();
+            }
+        });
+    </script>
+</body>
+</html>

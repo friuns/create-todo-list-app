@@ -1,0 +1,21 @@
+{
+  "name": "create-todo-list-app",
+  "version": "1.0.0",
+  "description": "A server-side app that prints out query text",
+  "main": "index.js",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "echo 'No build step required'",
+    "deploy": "netlify deploy --prod"
+  },
+  "keywords": [
+    "netlify",
+    "serverless",
+    "query-params"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "netlify-cli": "^17.0.0"
+  }
+}
