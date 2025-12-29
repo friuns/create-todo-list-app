@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "netlify dev",
-    "build": "echo 'No build step required'",
+    "build": "mkdir -p dist && cp -r public/* dist/ && cp -r netlify dist/",
     "deploy": "netlify deploy --prod"
   },
   "keywords": [
